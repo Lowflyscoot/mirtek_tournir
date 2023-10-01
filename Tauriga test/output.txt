@@ -1,0 +1,10 @@
+Message type: 1
+Message length: 9
+Data: 00000120 05060708 55000000 
+CRC: 0x01010101
+
+Message type: 1
+Message length: 9
+Data: 00000120 05060708 55000000 
+CRC: 0xf83ea4ab
+

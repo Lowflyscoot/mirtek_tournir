@@ -10,6 +10,7 @@
                 // "${file}",
                 "messages_parser.c",
                 "singly_linked_list.c",
+                "crc32.c",
                 "-o",
                 "${fileDirname}\\${fileBasenameNoExtension}.exe",
                 "-lstdc++"
