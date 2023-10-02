@@ -276,14 +276,6 @@ int main (void)
         free(new_mess);
     }
 
-    // uint32_t crc_table [256];
-    // make_crc_table(crc_table);
-    // for (int i = 0; i < 256; i++)
-    // {
-    //     fprintf(output_file, "%08X ", crc_table[i]);
-    //     if (i % 8 == 7) fprintf(output_file, "\n");
-    // }
-
     // Освобождаем память
     free(d_array_input);
 }
