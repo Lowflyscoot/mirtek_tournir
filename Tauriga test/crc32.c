@@ -36,37 +36,37 @@ uint32_t crc_table [256] = {
     0x048D0C6C, 0x02AE3AFB, 0x01495A2D, 0x076A6CBA, 0x06879B81, 0x00A4AD16, 0x0343CDC0, 0x0560FB57, 
 };
 
-void make_crc_table(unsigned long crcTable[]) {
-    unsigned long POLYNOMIAL = 0x04C11DB7;
-    unsigned long remainder;
-    unsigned char b = 0;
-    do {
-        // Start with the data byte
-        remainder = b;
-        for (unsigned long bit = 8; bit > 0; --bit) {
-            if (remainder & 1)
-                remainder = (remainder >> 1) ^ POLYNOMIAL;
-            else
-                remainder = (remainder >> 1);
-        }
-        crcTable[(size_t)b] = remainder;
-    } while(0 != ++b);
-}
+// void make_crc_table(unsigned long crcTable[]) {
+//     unsigned long POLYNOMIAL = 0x04C11DB7;
+//     unsigned long remainder;
+//     unsigned char b = 0;
+//     do {
+//         // Start with the data byte
+//         remainder = b;
+//         for (unsigned long bit = 8; bit > 0; --bit) {
+//             if (remainder & 1)
+//                 remainder = (remainder >> 1) ^ POLYNOMIAL;
+//             else
+//                 remainder = (remainder >> 1);
+//         }
+//         crcTable[(size_t)b] = remainder;
+//     } while(0 != ++b);
+// }
 
-uint32_t gen_crc(unsigned char *p, size_t n) {
-    unsigned long crc = 0xfffffffful;
-    size_t i;
-    for(i = 0; i < n; i++)
-        crc = crc_table[*p++ ^ (crc&0xff)] ^ (crc>>8);
-    return(~crc);
-}
+// uint32_t gen_crc(unsigned char *p, size_t n) {
+//     unsigned long crc = 0xfffffffful;
+//     size_t i;
+//     for(i = 0; i < n; i++)
+//         crc = crc_table[*p++ ^ (crc&0xff)] ^ (crc>>8);
+//     return(~crc);
+// }
 
-uint32_t crc32c(uint32_t crc, const void *buf, size_t size)
-{
-	const uint8_t *p = buf;
+// uint32_t crc32c(uint32_t crc, const void *buf, size_t size)
+// {
+// 	const uint8_t *p = buf;
 
-	while (size--)
-		crc = crc_table[(crc ^ *p++) & 0xff] ^ (crc >> 8);
+// 	while (size--)
+// 		crc = crc_table[(crc ^ *p++) & 0xff] ^ (crc >> 8);
 
-	return crc;
-}
+// 	return crc;
+// }

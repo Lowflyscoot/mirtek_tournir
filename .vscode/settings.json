@@ -44,6 +44,8 @@
         "streambuf": "cpp",
         "typeinfo": "cpp",
         "singly_linked_list.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "dynamic_array.h": "c",
+        "stdint.h": "c"
     }
 }

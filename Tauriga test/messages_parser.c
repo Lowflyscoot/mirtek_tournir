@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "crc32.h"
 #include "singly_linked_list.h"
+#include "dynamic_array.h"
 
 #define MIN(x,y) (x < y ? x:y)
 #define MAX(x,y) (x > y ? x:y)
@@ -34,25 +35,25 @@ typedef struct {
     char input_buf [258];
 } buffers_t;
 
-// Функция для подсчёта количества анкоров в списке
-int count_anchors (list_t *list, char *anchor){
-    if (!list) return 0;
+// // Функция для подсчёта количества анкоров в списке
+// int count_anchors (list_t *list, char *anchor){
+//     if (!list) return 0;
 
-    size_t result = 0;
+//     size_t result = 0;
 
-    // Пытаемся получить первый анкор
-    list_t *current_item = get_item_after_anchor(list, anchor);
+//     // Пытаемся получить первый анкор
+//     list_t *current_item = get_item_after_anchor(list, anchor);
     
-    // Проверяем нашёлся ли хотя бы 1 и ищем следующий
-    // в 1 проход при найденном анкоре результат в любом случае инкрементируется
-    // если за анкором не идёт символов - он недействительный
-    while (current_item) {
-        current_item = get_item_after_anchor(current_item, anchor);
-        result++;
-    }
+//     // Проверяем нашёлся ли хотя бы 1 и ищем следующий
+//     // в 1 проход при найденном анкоре результат в любом случае инкрементируется
+//     // если за анкором не идёт символов - он недействительный
+//     while (current_item) {
+//         current_item = get_item_after_anchor(current_item, anchor);
+//         result++;
+//     }
 
-    return result;
-}
+//     return result;
+// }
 
 // Преобразует ascii символ в половину байта
 uint8_t ascii_to_half_byte(const uint8_t symbol_code)
@@ -76,7 +77,7 @@ uint8_t pack_byte (list_t *asccii_item)
     return result_byte;
 }
 
-
+// Парсинг сообщения
 message_t *message_parsing (list_t *item){
     message_t *current_message = malloc(sizeof(message_t));
     list_t *current_item = item;
@@ -146,9 +147,6 @@ void print_message_to_file (message_t *printing_message, FILE *target_file)
 
 int main (void)
 {
-    // Создаём указатель на список, он будет проинициализирован при первой попытке добавления чего-либо
-    list_t *input_list = NULL;
-
     // Открыть файл ввода
     FILE *input_file;
     input_file = fopen("input.txt", "r");
@@ -158,50 +156,83 @@ int main (void)
 
     // Хранилище обрабатываемого символа
     char symbol;
-
-    // Вычитка из ввода всех символов подряд и сохранение их в динамическом массиве
-    // Первый символ, который инициализирует список, вычитываем вручную
-    input_list = init_list(fgetc(input_file));
+    
+    // Собираем весь ввод в динамический массив
+    d_array_t *d_array_input = init_array(10);
     do {
         symbol = fgetc(input_file);
-        add_to_list_end(input_list, (int)symbol);
+        add_element(d_array_input, symbol);
     } while (symbol != EOF);
+    
+    uint8_t tmparray [100];
+    memcpy(tmparray, d_array_input->array, 100);
 
-    // Получаем длину данных
-    int length = count_list_items(input_list);
+    int temp2 = get_anchor_position(d_array_input, "mess=", 0);
+    temp2 = count_anchors(d_array_input, "mess=");
 
-    // Указатель на очередной элемент списка
-    list_t *current_item = input_list;
-
-    // Считаем сколько анкоров на сообщения и маски есть во вводе
     counters_t counters = {NULL, NULL, 0, 0};
 
-    // Число пар равно минимальному из числа сообщений и масок
-    counters.pair_number = MIN(count_anchors(input_list, "mess="), count_anchors(input_list, "mask="));
-    
-    counters.another_message = get_item_after_anchor(input_list, "mess=");
-    // counters.another_mask = get_item_after_anchor(input_list, "mess=");
-
-    // Выделяем память под все сообщения которые будут вычитываться
-    const message_t *messages_array = malloc(sizeof(message_t*) * counters.pair_number);
-
-    message_t *test_message = message_parsing(counters.another_message);
-
-    print_message_to_file(test_message, output_file);
-
-    // todo доработать и надыбать функцию расчёта срс которая будет принимать предыдущее срс
-
-    test_message->crc32 = gen_crc(test_message->data, test_message->final);
-
-    print_message_to_file(test_message, output_file);
-
-    // for (int i = 0; i < counters.pair_number; i++)
-    // {
-
-    // }
-
-
-    free_all_list(input_list);
-    free(messages_array);
-    free(test_message);
+    counters.pair_number = MIN(count_anchors(d_array_input, "mess="), count_anchors(d_array_input, "mask="));
 }
+
+// int main (void)
+// {
+//     // Создаём указатель на список, он будет проинициализирован при первой попытке добавления чего-либо
+//     list_t *input_list = NULL;
+
+//     // Открыть файл ввода
+//     FILE *input_file;
+//     input_file = fopen("input.txt", "r");
+//     // Открыть файл вывода на запись
+//     FILE *output_file;
+//     output_file = fopen("output.txt", "w+");
+
+//     // Хранилище обрабатываемого символа
+//     char symbol;
+
+//     // Вычитка из ввода всех символов подряд и сохранение их в динамическом массиве
+//     // Первый символ, который инициализирует список, вычитываем вручную
+//     input_list = init_list(fgetc(input_file));
+//     do {
+//         symbol = fgetc(input_file);
+//         add_to_list_end(input_list, (int)symbol);
+//     } while (symbol != EOF);
+
+//     // Получаем длину данных
+//     int length = count_list_items(input_list);
+
+//     // Указатель на очередной элемент списка
+//     list_t *current_item = input_list;
+
+//     // Считаем сколько анкоров на сообщения и маски есть во вводе
+//     counters_t counters = {NULL, NULL, 0, 0};
+
+//     // Число пар равно минимальному из числа сообщений и масок
+//     counters.pair_number = MIN(count_anchors(input_list, "mess="), count_anchors(input_list, "mask="));
+    
+//     counters.another_message = get_item_after_anchor(input_list, "mess=");
+//     // counters.another_mask = get_item_after_anchor(input_list, "mess=");
+
+//     // Выделяем память под все сообщения которые будут вычитываться
+//     const message_t *messages_array = malloc(sizeof(message_t*) * counters.pair_number);
+
+//     message_t *test_message = message_parsing(counters.another_message);
+
+//     print_message_to_file(test_message, output_file);
+
+//     // todo доработать и надыбать функцию расчёта срс которая будет принимать предыдущее срс
+
+//     test_message->crc32 = gen_crc(test_message->data, test_message->final);
+
+//     print_message_to_file(test_message, output_file);
+
+//     // for (int i = 0; i < counters.pair_number; i++)
+//     // {
+
+//     // }
+
+
+//     free_all_list(input_list);
+//     free(messages_array);
+//     free(test_message);
+// }
