@@ -2,6 +2,10 @@
 
 d_array_t *check_length (d_array_t *item)
 {
+    if (item->array_pointer > (item->array + item->size))
+    {
+        reset_pointer(item);
+    }
     if (item->used_memory >= item->size)
     {
         size_t pointer_shift = item->array_pointer - item->array;
@@ -34,6 +38,25 @@ void add_element (d_array_t *array, uint8_t byte)
     array->used_memory++;
 }
 
+void reset_pointer(d_array_t *array)
+{
+    array->array_pointer = array->array;
+}
+
+void set_pointer_by_position(d_array_t *array, size_t position)
+{
+    array->array_pointer = array->array + position;
+    array = check_length(array);
+}
+
+uint8_t get_array_element_with_shift(d_array_t *array)
+{
+    uint8_t result = *array->array_pointer++;
+    array = check_length(array);
+    return result;
+}
+
+// void set_arra
 
 size_t get_anchor_position(d_array_t *array, char *anchor, size_t start_pos)
 {

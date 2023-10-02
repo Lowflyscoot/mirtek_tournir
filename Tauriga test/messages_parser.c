@@ -30,30 +30,15 @@ typedef struct {
     uint32_t crc32;
 } message_t;
 
-
 typedef struct {
     char input_buf [258];
 } buffers_t;
 
-// // Функция для подсчёта количества анкоров в списке
-// int count_anchors (list_t *list, char *anchor){
-//     if (!list) return 0;
-
-//     size_t result = 0;
-
-//     // Пытаемся получить первый анкор
-//     list_t *current_item = get_item_after_anchor(list, anchor);
-    
-//     // Проверяем нашёлся ли хотя бы 1 и ищем следующий
-//     // в 1 проход при найденном анкоре результат в любом случае инкрементируется
-//     // если за анкором не идёт символов - он недействительный
-//     while (current_item) {
-//         current_item = get_item_after_anchor(current_item, anchor);
-//         result++;
-//     }
-
-//     return result;
-// }
+uint32_t mask_parsing (d_array_t *item, size_t position);
+uint8_t pack_byte (d_array_t *item);
+message_t *message_parsing (d_array_t *item, size_t position);
+uint32_t mask_parsing (d_array_t *item, size_t position);
+uint32_t mask_parsing (d_array_t *item, size_t position);
 
 // Преобразует ascii символ в половину байта
 uint8_t ascii_to_half_byte(const uint8_t symbol_code)
@@ -69,27 +54,25 @@ uint8_t ascii_to_half_byte(const uint8_t symbol_code)
 }
 
 // Преобразует два идущих последовательно символа ввода в байт
-uint8_t pack_byte (list_t *asccii_item)
+uint8_t pack_byte (d_array_t *item)
 {
     uint8_t result_byte = 0;
-    result_byte = ascii_to_half_byte(asccii_item->data) << 4;
-    result_byte |= ascii_to_half_byte(asccii_item->next->data);
+    result_byte = ascii_to_half_byte(get_array_element(item)) << 4;
+    result_byte |= ascii_to_half_byte(get_array_element(item));
     return result_byte;
 }
 
 // Парсинг сообщения
-message_t *message_parsing (list_t *item){
+message_t *message_parsing (d_array_t *item, size_t position){
     message_t *current_message = malloc(sizeof(message_t));
-    list_t *current_item = item;
+    uint8_t *current_item = item;
+
+    set_pointer_by_position(item, position);
 
     // Забираем из сообщения тип
-    current_message->type = pack_byte(current_item);
-    if (!current_item->next->next || !current_item->next) return current_message;
-    current_item = current_item->next->next;
+    current_message->type = pack_byte(item);
     // Забираем из сообщения длину поля данных
-    current_message->length = pack_byte(current_item);
-    if (!current_item->next->next || !current_item->next) return current_message;
-    current_item = current_item->next->next;
+    current_message->length = pack_byte(item);
 
     // Вычисляем итоговую длину массива данных, если исходная не кратная 4
     current_message->final_length = current_message->length;
@@ -102,17 +85,17 @@ message_t *message_parsing (list_t *item){
     current_message->data = malloc(sizeof(int*) * current_message->length);
     uint32_t *data_pointer = current_message->data;
     unsigned __int32 tmp;
-    // Сохраняем сначала реальные данные, а потом добиваем нулями остаток если он есть
+    
+    // Сохраняем сначала реальные данные, а потом оставляем нулями остаток если он есть
     for (int i = 0; i < current_message->length; i++)
     {
         *data_pointer = 0;
         for (int j = 0; j < 4; j++)
         {
             if (((i * 4) + j) >= current_message->length) break;
-            tmp = (__int32)pack_byte(current_item) << (24 - j * 8);
-            *data_pointer |= (__int32)pack_byte(current_item) << (24 - j * 8);
-            if (!current_item->next->next || !current_item->next) return current_message;
-            current_item = current_item->next->next;
+
+            tmp = (__int32)pack_byte(item) << (24 - j * 8);
+            *data_pointer |= (__int32)pack_byte(item) << (24 - j * 8);
         }
         data_pointer++;
     }
@@ -121,28 +104,83 @@ message_t *message_parsing (list_t *item){
     current_message->crc32 = 0;
     for (int i = 0; i < 4; i++)
     {
-        current_message->crc32 |= (pack_byte(current_item) << (24 - i * 8));
-        if (!current_item->next->next || !current_item->next) return current_message;
-        current_item = current_item->next->next;
+        current_message->crc32 |= (pack_byte(item) << (24 - i * 8));
     }
 
     return current_message;
 }
 
 
-void print_message_to_file (message_t *printing_message, FILE *target_file)
+// Парсинг маски из ввода
+uint32_t mask_parsing (d_array_t *item, size_t position){
+    set_pointer_by_position(item, position);
+    uint32_t result_mask = 0;
+
+    // Сохраняем маску
+    for (int i = 0; i < 4; i++)
+    {
+        result_mask |= (pack_byte(item) << (24 - i * 8));
+    }
+
+    return result_mask;
+}
+
+
+// Наложение одной маски на одно сообщение с генерацией нового сообщения
+message_t *mask_overlay (message_t *recieved_message, uint32_t mask)
 {
-    fprintf(target_file, "Message type: %d\n", printing_message->type);
-    fprintf(target_file, "Message length: %d\n", printing_message->length);
-    fprintf(target_file, "Data: ");
-    uint32_t *data_pointer = printing_message->data;
-    for (int i = 0; i < (printing_message->final_length / 4); i++)
+    message_t *new_message = malloc(sizeof(message_t));
+    // Вывод данных в динамический массив для редактирования
+    uint32_t *process_data = malloc(sizeof(uint32_t) * recieved_message->final_length);
+    memcpy(process_data, recieved_message->data, recieved_message->final_length);
+    // Инициализируем поля нового сообщения и выделяем под него память
+    new_message->type = recieved_message->type;
+    new_message->final_length = recieved_message->final_length;
+    new_message->length = recieved_message->length;
+    new_message->data = malloc(sizeof(uint32_t) * recieved_message->final_length);
+
+    for (int i = 0; i < (recieved_message->final_length); i++)
+    {
+        *(process_data + i*(sizeof(uint32_t))) = *process_data & mask;
+    }
+
+    memcpy(new_message->data, process_data, recieved_message->final_length);
+
+    free(process_data);
+
+    return new_message;
+}
+
+// Вывод совокупности обоих сообщений в файл
+void print_message_to_file (message_t *old_message, message_t *new_message, FILE *target_file)
+{
+    uint32_t *data_pointer = NULL;
+    
+    fprintf(target_file, "Message type: %d\n", old_message->type);
+    fprintf(target_file, "Initial message length: %d\n", old_message->length);
+    fprintf(target_file, "Initial message data bytes: ");
+
+    data_pointer = old_message->data;
+    for (int i = 0; i < (old_message->final_length / 4); i++)
     {
         fprintf(target_file, "%08X ", *data_pointer);
         data_pointer++;
     }
-    fprintf(target_file, "\nCRC: ");
-    fprintf(target_file, "0x%08x\n\n", printing_message->crc32);
+    fprintf(target_file, "\nInitial CRC-32: ");
+    fprintf(target_file, "0x%08x\n\n", old_message->crc32);
+
+    fprintf(target_file, "Modified message length: %d\n", new_message->final_length);
+    fprintf(target_file, "Modified message data bytes with mask: ");
+
+    data_pointer = new_message->data;
+    for (int i = 0; i < (new_message->final_length / 4); i++)
+    {
+        fprintf(target_file, "%08X ", *data_pointer);
+        data_pointer++;
+    }
+
+    fprintf(target_file, "\nModified CRC-32: ");
+    fprintf(target_file, "0x%08x\n\n", new_message->crc32);
 }
 
 int main (void)
@@ -164,75 +202,38 @@ int main (void)
         add_element(d_array_input, symbol);
     } while (symbol != EOF);
     
-    uint8_t tmparray [100];
-    memcpy(tmparray, d_array_input->array, 100);
-
-    int temp2 = get_anchor_position(d_array_input, "mess=", 0);
-    temp2 = count_anchors(d_array_input, "mess=");
-
     counters_t counters = {NULL, NULL, 0, 0};
 
     counters.pair_number = MIN(count_anchors(d_array_input, "mess="), count_anchors(d_array_input, "mask="));
+    uint32_t mask = 0;
+
+    size_t array_mess_position = 0;
+    size_t array_mask_position = 0;
+    message_t *new_message = NULL;
+    message_t *old_mess = NULL;
+    message_t *new_mess = NULL;
+
+    // Проходим по каждой паре
+    for (int i = 0; i < counters.pair_number; i++)
+    {
+        // Для каждого анкора ищем очередную позицию
+        array_mess_position = get_anchor_position(d_array_input, "mess=", array_mess_position);
+        // По позиции парсим сообщение и сохраняем его в выделенную область
+        new_mess = message_parsing(d_array_input, array_mess_position);
+        // Находим ближайшую маску
+        array_mask_position = get_anchor_position(d_array_input, "mask=", array_mask_position);
+        // Парсим маску
+        mask = mask_parsing(d_array_input, array_mask_position);
+        // Накладываем маску на исходное сообщение и формируем новое
+        new_mess = mask_overlay(old_mess, mask);
+        // Выводим в файл результаты
+        print_message_to_file(old_mess, new_mess, output_file);
+        // Освобождаем память
+        free(old_mess->data);
+        free(old_mess);
+        free(new_mess->data);
+        free(new_mess);
+    }
+    // Освобождаем память
+    free(d_array_input);
 }
-
-// int main (void)
-// {
-//     // Создаём указатель на список, он будет проинициализирован при первой попытке добавления чего-либо
-//     list_t *input_list = NULL;
-
-//     // Открыть файл ввода
-//     FILE *input_file;
-//     input_file = fopen("input.txt", "r");
-//     // Открыть файл вывода на запись
-//     FILE *output_file;
-//     output_file = fopen("output.txt", "w+");
-
-//     // Хранилище обрабатываемого символа
-//     char symbol;
-
-//     // Вычитка из ввода всех символов подряд и сохранение их в динамическом массиве
-//     // Первый символ, который инициализирует список, вычитываем вручную
-//     input_list = init_list(fgetc(input_file));
-//     do {
-//         symbol = fgetc(input_file);
-//         add_to_list_end(input_list, (int)symbol);
-//     } while (symbol != EOF);
-
-//     // Получаем длину данных
-//     int length = count_list_items(input_list);
-
-//     // Указатель на очередной элемент списка
-//     list_t *current_item = input_list;
-
-//     // Считаем сколько анкоров на сообщения и маски есть во вводе
-//     counters_t counters = {NULL, NULL, 0, 0};
-
-//     // Число пар равно минимальному из числа сообщений и масок
-//     counters.pair_number = MIN(count_anchors(input_list, "mess="), count_anchors(input_list, "mask="));
-    
-//     counters.another_message = get_item_after_anchor(input_list, "mess=");
-//     // counters.another_mask = get_item_after_anchor(input_list, "mess=");
-
-//     // Выделяем память под все сообщения которые будут вычитываться
-//     const message_t *messages_array = malloc(sizeof(message_t*) * counters.pair_number);
-
-//     message_t *test_message = message_parsing(counters.another_message);
-
-//     print_message_to_file(test_message, output_file);
-
-//     // todo доработать и надыбать функцию расчёта срс которая будет принимать предыдущее срс
-
-//     test_message->crc32 = gen_crc(test_message->data, test_message->final);
-
-//     print_message_to_file(test_message, output_file);
-
-//     // for (int i = 0; i < counters.pair_number; i++)
-//     // {
-
-//     // }
-
-
-//     free_all_list(input_list);
-//     free(messages_array);
-//     free(test_message);
-// }
