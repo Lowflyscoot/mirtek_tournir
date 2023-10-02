@@ -26,7 +26,7 @@ typedef struct {
     uint8_t type;
     size_t length;
     size_t final_length;
-    const uint8_t* data;
+    uint8_t* data;
     uint32_t crc32;
 } message_t;
 
@@ -159,6 +159,22 @@ message_t *mask_overlay (message_t *recieved_message, uint32_t mask)
         process_data_pointer++;
     }
 
+    uint32_t CRC32 = 0xFFFFFFFFull;
+    CRC32 = crc32c(CRC32, new_message->type);
+    CRC32 = crc32c(CRC32, new_message->final_length);
+
+    uint8_t byte_block[4] = {};
+    for (int i = 0; i < (recieved_message->final_length / 4); i++)
+    {
+        memcpy(byte_block, &process_data[i], 4);
+        for (int j = 0; j < 4; j++)
+        {
+            CRC32 = crc32c(CRC32, byte_block[3 - j]);
+        }
+    }
+
+    new_message->crc32 = CRC32;
+
     new_message->data = (uint8_t*)process_data;
     
     return new_message;
@@ -214,7 +230,7 @@ int main (void)
     input_file = fopen("input.txt", "r");
     // Открыть файл вывода на запись
     FILE *output_file;
-    output_file = fopen("output.txt", "w+");
+    output_file = fopen("output.txt", "a");
 
     // Хранилище обрабатываемого символа
     char symbol;
@@ -254,11 +270,20 @@ int main (void)
         // Выводим в файл результаты
         print_message_to_file(old_mess, new_mess, output_file);
         // Освобождаем память
-        // free(old_mess->data);
-        // free(old_mess);
-        // free(new_mess->data);
-        // free(new_mess);
+        free(old_mess->data);
+        free(old_mess);
+        free(new_mess->data);
+        free(new_mess);
     }
+
+    // uint32_t crc_table [256];
+    // make_crc_table(crc_table);
+    // for (int i = 0; i < 256; i++)
+    // {
+    //     fprintf(output_file, "%08X ", crc_table[i]);
+    //     if (i % 8 == 7) fprintf(output_file, "\n");
+    // }
+
     // Освобождаем память
     free(d_array_input);
 }
